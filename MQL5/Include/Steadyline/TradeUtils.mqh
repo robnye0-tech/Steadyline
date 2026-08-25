@@ -36,6 +36,13 @@ public:
       return (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? 1 : -1;
      }
 
+   datetime PositionOpenTime() const
+     {
+      if(!PositionSelect(m_symbol))
+         return 0;
+      return (datetime)PositionGetInteger(POSITION_TIME);
+     }
+
    bool OpenBuy(const double lots, const double sl, const double tp, const string comment)
      {
       return m_trade.Buy(lots, m_symbol, 0.0, sl, tp, comment);

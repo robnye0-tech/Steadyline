@@ -1,0 +1,18 @@
+;Steadyline Scalper EA - default parameter set with optimization ranges
+;Format: Value||Start||Step||Stop||Optimize(Y/N)
+;Load via: MetaEditor/Strategy Tester > Expert properties > Inputs > Load
+;Flip N to Y on a line to include that parameter in Optimization runs.
+InpMagicNumber=20260825||20260825||1||20260825||N
+InpSlippagePoints=10||10||1||10||N
+InpTimeframe=1||1||1||1||N
+InpFastEmaPeriod=5||3||1||10||N
+InpSlowEmaPeriod=13||10||1||25||N
+InpRsiPeriod=14||10||2||20||N
+InpRsiBuyMax=70.0||60.0||5.0||80.0||N
+InpRsiSellMin=30.0||20.0||5.0||40.0||N
+InpStopLossPoints=100||50||10||200||N
+InpTakeProfitPoints=150||75||15||300||N
+InpMaxBarsInTrade=20||10||5||40||N
+InpMaxSpreadPoints=20||10||5||30||N
+InpRiskPercent=0.5||0.25||0.25||1.0||N
+InpMaxDailyLossPercent=3.0||3.0||1.0||3.0||N
