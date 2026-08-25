@@ -5,21 +5,16 @@
 //+------------------------------------------------------------------+
 #property strict
 
-enum ENUM_SIGNAL
-  {
-   SIGNAL_NONE = 0,
-   SIGNAL_BUY  = 1,
-   SIGNAL_SELL = -1
-  };
+#include <Steadyline/Signal.mqh>
 
 class CScalpSignalEngine
   {
 private:
    string            m_symbol;
    ENUM_TIMEFRAMES   m_timeframe;
-   int               m_handle_fast;
-   int               m_handle_slow;
-   int               m_handle_rsi;
+   int               m_handle_fast = INVALID_HANDLE;
+   int               m_handle_slow = INVALID_HANDLE;
+   int               m_handle_rsi  = INVALID_HANDLE;
 
 public:
    bool Init(const string symbol, const ENUM_TIMEFRAMES timeframe,

@@ -59,21 +59,37 @@ repo's `MQL5\` contents into that folder's `MQL5\` subfolder yourself.
 At M1 with a 20-bar max hold, expect a lot more trades than the old
 H1 gold strategy — that's expected for a scalper.
 
-## 4. Fine-tuning via Optimization
+## 4. Testing each strategy
 
-The preset file already has ranges for the tunable inputs
-(`InpFastEmaPeriod`, `InpSlowEmaPeriod`, `InpRsiPeriod`, `InpRsiBuyMax`,
-`InpRsiSellMin`, `InpReverseSignal`, `InpSessionStartHour`,
-`InpSessionEndHour`, `InpAtrPeriod`, `InpSlAtrMultiplier`,
-`InpTpAtrMultiplier`, `InpMaxBarsInTrade`, `InpMaxSpreadPoints`,
-`InpCooldownBars`, `InpRiskPercent`). To sweep them:
+The EA has three selectable entry models via `InpStrategyMode` (0 = EMA
+crossover, 1 = Bollinger mean-reversion, 2 = higher-TF trend +
+Stochastic pullback) — see `docs/strategy.md` for what each does and why
+they were added. **Test them one at a time**, not by optimizing
+`InpStrategyMode` itself:
+
+1. Set `InpStrategyMode` to the one you're testing (leave it fixed —
+   not optimized).
+2. In **Expert properties > Inputs**, only tick the `Y` checkbox for
+   that strategy's own parameters (the `.set` file groups them: Strategy
+   0 / 1 / 2 blocks) plus the shared ones you want to sweep (session,
+   ATR, cooldown, risk). Leave the other two strategies' inputs
+   unchecked — sweeping them wastes runs on parameters that don't apply
+   while a different mode is active.
+3. Run a plain (non-optimizing) backtest first per mode to sanity-check
+   it trades and roughly where it lands, before spending time on a full
+   Optimization pass.
+
+## 5. Fine-tuning via Optimization
+
+Once you've picked a mode to focus on:
 
 1. In the Tester, switch **Optimization** from `Disabled` to
    `Slow complete algorithm` (exhaustive) or `Fast genetic algorithm`
    (faster, approximate — fine once ranges are narrowed).
 2. In **Expert properties > Inputs**, tick the checkbox next to each
    parameter you want swept (the `Y`/`N` column, matching the `.set`
-   file's optimize flag).
+   file's optimize flag) — that strategy's own inputs plus whichever
+   shared ones you want tuned.
 3. Pick an **Optimization criterion** — `Balance max` alone is
    overfit-prone; prefer `Balance + max drawdown`, or `Custom` if you
    want to weight profit factor/drawdown yourself.
@@ -83,7 +99,7 @@ The preset file already has ranges for the tunable inputs
    is very likely overfit to that specific date range, which is an even
    bigger risk on M1 data than on H1.
 
-## 5. Avoid overfitting — validate out-of-sample
+## 6. Avoid overfitting — validate out-of-sample
 
 1. Optimize on one date range (e.g. one month), then re-run a plain
    (non-optimizing) backtest of the winning parameters on a different

@@ -2,15 +2,37 @@
 ;Format: Value||Start||Step||Stop||Optimize(Y/N)
 ;Load via: MetaEditor/Strategy Tester > Expert properties > Inputs > Load
 ;Flip N to Y on a line to include that parameter in Optimization runs.
+;
+;Recommended workflow: pick ONE InpStrategyMode, leave InpStrategyMode
+;itself at N (fixed), and only flip Y on that strategy's own parameters
+;(group 0, 1, or 2 below) plus the shared ones (session/ATR/cooldown/risk)
+;when optimizing -- sweeping across strategies in one pass wastes runs on
+;parameters that don't apply to whichever mode a given run isn't using.
 InpMagicNumber=20260825||20260825||1||20260825||N
 InpSlippagePoints=10||10||1||10||N
+InpStrategyMode=0||0||1||2||N
 InpTimeframe=1||1||1||1||N
+InpReverseSignal=0||0||1||1||N
+;--- Strategy 0: EMA crossover + RSI filter
 InpFastEmaPeriod=5||3||1||10||N
 InpSlowEmaPeriod=13||10||1||25||N
 InpRsiPeriod=14||10||2||20||N
 InpRsiBuyMax=70.0||60.0||5.0||80.0||N
 InpRsiSellMin=30.0||20.0||5.0||40.0||N
-InpReverseSignal=0||0||1||1||N
+;--- Strategy 1: Bollinger Band mean-reversion
+InpBbPeriod=20||10||2||30||N
+InpBbDeviation=2.0||1.0||0.25||3.0||N
+InpBbRsiOversold=30.0||20.0||5.0||40.0||N
+InpBbRsiOverbought=70.0||60.0||5.0||80.0||N
+;--- Strategy 2: Higher-TF trend + Stochastic pullback
+InpTrendTimeframe=16385||16385||1||16385||N
+InpTrendEmaPeriod=50||20||10||100||N
+InpStochKPeriod=5||3||1||10||N
+InpStochDPeriod=3||2||1||5||N
+InpStochSlowing=3||1||1||5||N
+InpStochOversold=20.0||10.0||5.0||30.0||N
+InpStochOverbought=80.0||70.0||5.0||90.0||N
+;--- Shared: session filter, ATR sizing, cost guards, risk
 InpUseSessionFilter=1||1||1||1||N
 InpSessionStartHour=7||0||1||23||N
 InpSessionEndHour=19||0||1||23||N

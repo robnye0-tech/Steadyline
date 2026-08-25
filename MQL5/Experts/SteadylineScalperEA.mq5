@@ -1,39 +1,71 @@
 //+------------------------------------------------------------------+
 //|                                        SteadylineScalperEA.mq5   |
-//|      Fast scalping EA for EURUSD (works on any symbol).          |
-//|      Strategy: fast/slow EMA crossover on a low timeframe (M1    |
-//|      default), filtered by RSI so entries aren't taken into an   |
-//|      already-exhausted move. SL/TP are sized off ATR so they     |
-//|      match what price actually does inside the hold window,      |
-//|      a spread guard skips trades when cost eats the edge, a      |
-//|      cooldown after each close limits overtrading, and a         |
-//|      time-based exit stops trades from sitting open past their   |
-//|      thesis.                                                     |
+//|      Scalping EA for EURUSD (works on any symbol) with three     |
+//|      selectable, structurally distinct entry models -- pick one  |
+//|      via InpStrategyMode and backtest each independently rather  |
+//|      than assuming any one of them has a real edge:              |
+//|        0 EMA crossover + RSI filter    (momentum-following)      |
+//|        1 Bollinger Band mean-reversion (fade band extremes)      |
+//|        2 Higher-TF trend + Stochastic pullback (trend-following) |
+//|      SL/TP are sized off ATR so they match what price actually   |
+//|      does inside the hold window, a spread guard skips trades    |
+//|      when cost eats the edge, a cooldown after each close limits |
+//|      overtrading, a session filter restricts entries to a        |
+//|      configurable hour window, and a time-based exit stops       |
+//|      trades from sitting open past their thesis.                 |
 //|      This is a starting scaffold, not a validated strategy --    |
 //|      backtest and forward-test on a demo account before going    |
 //|      live.                                                       |
 //+------------------------------------------------------------------+
 #property copyright "Steadyline"
-#property version   "1.00"
+#property version   "2.00"
 #property strict
 
+#include <Steadyline/Signal.mqh>
 #include <Steadyline/ScalpSignalEngine.mqh>
+#include <Steadyline/MeanReversionSignalEngine.mqh>
+#include <Steadyline/TrendPullbackSignalEngine.mqh>
 #include <Steadyline/RiskManager.mqh>
 #include <Steadyline/TradeUtils.mqh>
+
+enum ENUM_STRATEGY_MODE
+  {
+   STRAT_EMA_CROSS      = 0, // EMA crossover + RSI filter
+   STRAT_BB_MEANREV     = 1, // Bollinger Band mean-reversion
+   STRAT_TREND_PULLBACK = 2  // Higher-TF trend + Stochastic pullback
+  };
 
 //--- inputs
 input group "General"
 input ulong             InpMagicNumber      = 20260825;
 input ulong             InpSlippagePoints   = 10;
 
-input group "Strategy (fast EMA crossover + RSI filter)"
-input ENUM_TIMEFRAMES   InpTimeframe        = PERIOD_M1;
+input group "Strategy selection"
+input ENUM_STRATEGY_MODE InpStrategyMode    = STRAT_EMA_CROSS;
+input ENUM_TIMEFRAMES   InpTimeframe        = PERIOD_M1;   // entry timeframe, used by all modes
+input bool              InpReverseSignal    = false;       // flip buy/sell for whichever mode is active
+
+input group "Strategy 0: EMA crossover + RSI filter"
 input int               InpFastEmaPeriod    = 5;
 input int               InpSlowEmaPeriod    = 13;
 input int               InpRsiPeriod        = 14;
 input double            InpRsiBuyMax        = 70.0;  // skip buys if RSI already above this
 input double            InpRsiSellMin       = 30.0;  // skip sells if RSI already below this
-input bool              InpReverseSignal    = false; // fade the crossover instead of following it
+
+input group "Strategy 1: Bollinger Band mean-reversion"
+input int               InpBbPeriod         = 20;
+input double            InpBbDeviation      = 2.0;
+input double            InpBbRsiOversold    = 30.0;  // confirm a lower-band close with RSI below this
+input double            InpBbRsiOverbought  = 70.0;  // confirm an upper-band close with RSI above this
+
+input group "Strategy 2: Higher-TF trend + Stochastic pullback"
+input ENUM_TIMEFRAMES   InpTrendTimeframe   = PERIOD_H1;
+input int               InpTrendEmaPeriod   = 50;
+input int               InpStochKPeriod     = 5;
+input int               InpStochDPeriod     = 3;
+input int               InpStochSlowing     = 3;
+input double            InpStochOversold    = 20.0;
+input double            InpStochOverbought  = 80.0;
 
 input group "Session filter (broker/server time)"
 input bool              InpUseSessionFilter = true;
@@ -55,9 +87,11 @@ input double            InpRiskPercent         = 0.5;  // % of equity risked per
 input double            InpMaxDailyLossPercent = 3.0;  // halt new trades once daily loss reaches this
 
 //--- globals
-CScalpSignalEngine g_signals;
-CRiskManager       g_risk;
-CTradeUtils        g_trade;
+CScalpSignalEngine          g_emaCross;
+CMeanReversionSignalEngine  g_meanRev;
+CTrendPullbackSignalEngine  g_trendPullback;
+CRiskManager                g_risk;
+CTradeUtils                 g_trade;
 
 string             g_symbol;
 datetime           g_last_bar_time = 0;
@@ -70,9 +104,24 @@ int OnInit()
   {
    g_symbol = _Symbol;
 
-   if(!g_signals.Init(g_symbol, InpTimeframe, InpFastEmaPeriod, InpSlowEmaPeriod, InpRsiPeriod))
+   bool signalsOk = false;
+   switch(InpStrategyMode)
      {
-      Print("SteadylineScalperEA: failed to create indicator handles");
+      case STRAT_EMA_CROSS:
+         signalsOk = g_emaCross.Init(g_symbol, InpTimeframe, InpFastEmaPeriod, InpSlowEmaPeriod, InpRsiPeriod);
+         break;
+      case STRAT_BB_MEANREV:
+         signalsOk = g_meanRev.Init(g_symbol, InpTimeframe, InpBbPeriod, InpBbDeviation, InpRsiPeriod);
+         break;
+      case STRAT_TREND_PULLBACK:
+         signalsOk = g_trendPullback.Init(g_symbol, InpTimeframe, InpTrendTimeframe, InpTrendEmaPeriod,
+                                           InpStochKPeriod, InpStochDPeriod, InpStochSlowing);
+         break;
+     }
+
+   if(!signalsOk)
+     {
+      Print("SteadylineScalperEA: failed to create indicator handles for strategy mode ", EnumToString(InpStrategyMode));
       return INIT_FAILED;
      }
 
@@ -92,9 +141,26 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
-   g_signals.Deinit();
+   g_emaCross.Deinit();
+   g_meanRev.Deinit();
+   g_trendPullback.Deinit();
    if(g_handle_atr != INVALID_HANDLE)
       IndicatorRelease(g_handle_atr);
+  }
+
+//+------------------------------------------------------------------+
+ENUM_SIGNAL EvaluateActiveStrategy()
+  {
+   switch(InpStrategyMode)
+     {
+      case STRAT_EMA_CROSS:
+         return g_emaCross.Evaluate(InpRsiBuyMax, InpRsiSellMin);
+      case STRAT_BB_MEANREV:
+         return g_meanRev.Evaluate(InpBbRsiOversold, InpBbRsiOverbought);
+      case STRAT_TREND_PULLBACK:
+         return g_trendPullback.Evaluate(InpStochOversold, InpStochOverbought);
+     }
+   return SIGNAL_NONE;
   }
 
 //+------------------------------------------------------------------+
@@ -142,7 +208,7 @@ void OnTick()
    if(spreadPoints > InpMaxSpreadPoints)
       return;
 
-   ENUM_SIGNAL signal = g_signals.Evaluate(InpRsiBuyMax, InpRsiSellMin);
+   ENUM_SIGNAL signal = EvaluateActiveStrategy();
    if(signal == SIGNAL_NONE)
       return;
 
