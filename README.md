@@ -13,8 +13,11 @@ MQL5/
       RiskManager.mqh      # position sizing / risk controls
       SignalEngine.mqh     # entry/exit signal logic
       TradeUtils.mqh       # order helpers, trade wrappers
+  Presets/
+    SteadylineGoldEA.set    # Strategy Tester input preset w/ optimization ranges
 docs/
   strategy.md               # strategy notes and rules
+  backtesting.md             # connecting to a demo account + Strategy Tester workflow
 ```
 
 ## Getting started
@@ -26,6 +29,10 @@ docs/
 3. Open `Experts/SteadylineGoldEA.mq5` in MetaEditor and compile (F7).
 4. Attach the compiled EA to an XAUUSD chart in MT5, ideally on a demo
    account first.
+
+See `docs/backtesting.md` for the full demo-account + Strategy Tester
+walkthrough, including how to load the input preset and fine-tune via
+Optimization without overfitting.
 
 ## Status
 
