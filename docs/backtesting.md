@@ -63,7 +63,8 @@ H1 gold strategy — that's expected for a scalper.
 
 The preset file already has ranges for the tunable inputs
 (`InpFastEmaPeriod`, `InpSlowEmaPeriod`, `InpRsiPeriod`, `InpRsiBuyMax`,
-`InpRsiSellMin`, `InpAtrPeriod`, `InpSlAtrMultiplier`,
+`InpRsiSellMin`, `InpReverseSignal`, `InpSessionStartHour`,
+`InpSessionEndHour`, `InpAtrPeriod`, `InpSlAtrMultiplier`,
 `InpTpAtrMultiplier`, `InpMaxBarsInTrade`, `InpMaxSpreadPoints`,
 `InpCooldownBars`, `InpRiskPercent`). To sweep them:
 

@@ -51,6 +51,39 @@ Re-run the backtest after this change before trusting any further
 parameter tuning — if it's still losing steadily rather than choppily,
 the entry logic itself (not just sizing/frequency) needs rework.
 
+## Postmortem 2: ATR sizing worked, the signal itself didn't
+
+With ATR-based SL/TP and a cooldown in place, the second backtest
+dropped to 3,698 trades and average win ($29.25) finally came out to
+~1.7x average loss ($17.26) — proof trades were now actually reaching
+SL/TP instead of the time exit. But win rate was only **31.37%**, and
+profit factor stayed at 0.77 with drawdown ballooning to ~99%. A payoff
+ratio can't rescue a signal that's wrong two-thirds of the time — this
+means the fast EMA crossover + RSI filter has close to no directional
+edge on M1 EURUSD as specified, or a slight negative one.
+
+The hourly breakdown pointed at two follow-ups, both added:
+- Entries were heaviest and least profitable in the Asian session
+  (hours 0–4 in the Tester's report), a known low-liquidity/choppy
+  window for EURUSD → `InpUseSessionFilter` /
+  `InpSessionStartHour` / `InpSessionEndHour` restrict entries to a
+  configurable window. **The right start/end hours depend on your
+  broker's server time offset** — compare against the Tester's
+  "Entries by hours" / "Profits and losses by hours" report to find
+  where losses actually cluster for your broker, rather than trusting
+  the defaults (7–19) blindly.
+- A 31% win rate with the crossover *followed* raises the obvious
+  question of whether *fading* it does better — `InpReverseSignal`
+  flips buy/sell so this can be A/B tested cheaply (including via
+  Optimization, since it's in the preset's optimizable set) instead of
+  guessing.
+
+If reversing the signal doesn't flip it profitable either, that's a
+strong signal the EMA-crossover framing itself is the wrong entry model
+for this instrument/timeframe — worth trying a genuinely different
+signal (e.g. Bollinger Band mean-reversion, or a higher-timeframe trend
+filter) rather than continuing to tune this one's dials.
+
 ## Risk management
 
 - Position size is computed from `InpRiskPercent` (% of account equity)
@@ -69,9 +102,6 @@ the entry logic itself (not just sizing/frequency) needs rework.
       the Tester's symbol properties, not just spread — scalping margins
       are thin enough that commission alone can flip a strategy
       unprofitable.
-- [ ] Session filter: EURUSD scalping edge is heavily concentrated around
-      London open and the London/NY overlap; a flat/quiet Asian session
-      can generate noise trades. Consider adding a trading-hours input.
 - [ ] News filter: EURUSD scalps are exposed to red-flag volatility
       spikes around high-impact news (NFP, CPI, FOMC) — the fixed SL can
       be jumped by slippage during those windows.

@@ -33,6 +33,12 @@ input int               InpSlowEmaPeriod    = 13;
 input int               InpRsiPeriod        = 14;
 input double            InpRsiBuyMax        = 70.0;  // skip buys if RSI already above this
 input double            InpRsiSellMin       = 30.0;  // skip sells if RSI already below this
+input bool              InpReverseSignal    = false; // fade the crossover instead of following it
+
+input group "Session filter (broker/server time)"
+input bool              InpUseSessionFilter = true;
+input int               InpSessionStartHour = 7;     // inclusive, 0-23
+input int               InpSessionEndHour   = 19;    // exclusive, 0-23
 
 input group "Trade management (ATR-based SL/TP)"
 input int               InpAtrPeriod        = 14;
@@ -129,6 +135,9 @@ void OnTick()
          return;
      }
 
+   if(InpUseSessionFilter && !IsWithinSession())
+      return;
+
    long spreadPoints = SymbolInfoInteger(g_symbol, SYMBOL_SPREAD);
    if(spreadPoints > InpMaxSpreadPoints)
       return;
@@ -136,6 +145,9 @@ void OnTick()
    ENUM_SIGNAL signal = g_signals.Evaluate(InpRsiBuyMax, InpRsiSellMin);
    if(signal == SIGNAL_NONE)
       return;
+
+   if(InpReverseSignal)
+      signal = (signal == SIGNAL_BUY) ? SIGNAL_SELL : SIGNAL_BUY;
 
    double atr[1];
    if(CopyBuffer(g_handle_atr, 0, 1, 1, atr) != 1 || atr[0] <= 0.0)
@@ -165,6 +177,21 @@ void OnTick()
       double tp = bid - tpDist;
       g_trade.OpenSell(lots, sl, tp, "SteadylineScalperEA sell");
      }
+  }
+
+//+------------------------------------------------------------------+
+//| Whether the current broker/server hour falls inside the allowed  |
+//| trading window. Handles a window that wraps past midnight.       |
+//+------------------------------------------------------------------+
+bool IsWithinSession()
+  {
+   MqlDateTime tm;
+   TimeToStruct(TimeCurrent(), tm);
+
+   if(InpSessionStartHour <= InpSessionEndHour)
+      return (tm.hour >= InpSessionStartHour && tm.hour < InpSessionEndHour);
+
+   return (tm.hour >= InpSessionStartHour || tm.hour < InpSessionEndHour);
   }
 
 //+------------------------------------------------------------------+
