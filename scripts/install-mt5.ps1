@@ -11,6 +11,10 @@
 .PARAMETER RepoUrl
   Git URL of the repo. Defaults to the Steadyline GitHub repo.
 
+.PARAMETER Branch
+  Branch to check out. Defaults to the current development branch, since
+  the EA lives there until it's merged to main.
+
 .PARAMETER RepoPath
   Local folder to clone/pull into. Defaults to $HOME\Steadyline.
 
@@ -27,6 +31,7 @@
 #>
 param(
     [string]$RepoUrl = "https://github.com/robnye0-tech/Steadyline.git",
+    [string]$Branch = "claude/metatrader5-gold-trading-0etqts",
     [string]$RepoPath = "$HOME\Steadyline",
     [string]$DataFolder
 )
@@ -37,13 +42,15 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw "Git is not installed or not on PATH. Install it first: winget install --id Git.Git -e"
 }
 
-# 1. Clone or update the repo
+# 1. Clone or update the repo, on the target branch
 if (Test-Path (Join-Path $RepoPath ".git")) {
-    Write-Host "Updating existing repo at $RepoPath..."
-    git -C $RepoPath pull
+    Write-Host "Updating existing repo at $RepoPath (branch $Branch)..."
+    git -C $RepoPath fetch origin $Branch
+    git -C $RepoPath checkout $Branch
+    git -C $RepoPath pull origin $Branch
 } else {
-    Write-Host "Cloning repo to $RepoPath..."
-    git clone $RepoUrl $RepoPath
+    Write-Host "Cloning repo to $RepoPath (branch $Branch)..."
+    git clone --branch $Branch $RepoUrl $RepoPath
 }
 
 # 2. Locate the MT5 data folder if not given
