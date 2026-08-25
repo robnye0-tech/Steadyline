@@ -13,10 +13,16 @@ class CMeanReversionSignalEngine
 private:
    string            m_symbol;
    ENUM_TIMEFRAMES   m_timeframe;
-   int               m_handle_bb  = INVALID_HANDLE;
-   int               m_handle_rsi = INVALID_HANDLE;
+   int               m_handle_bb;
+   int               m_handle_rsi;
 
 public:
+                     CMeanReversionSignalEngine()
+     {
+      m_handle_bb  = INVALID_HANDLE;
+      m_handle_rsi = INVALID_HANDLE;
+     }
+
    bool Init(const string symbol, const ENUM_TIMEFRAMES timeframe,
              const int bb_period, const double bb_deviation, const int rsi_period)
      {

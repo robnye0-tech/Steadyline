@@ -14,10 +14,16 @@ private:
    string            m_symbol;
    ENUM_TIMEFRAMES   m_entry_timeframe;
    ENUM_TIMEFRAMES   m_trend_timeframe;
-   int               m_handle_trend_ema = INVALID_HANDLE;
-   int               m_handle_stoch     = INVALID_HANDLE;
+   int               m_handle_trend_ema;
+   int               m_handle_stoch;
 
 public:
+                     CTrendPullbackSignalEngine()
+     {
+      m_handle_trend_ema = INVALID_HANDLE;
+      m_handle_stoch     = INVALID_HANDLE;
+     }
+
    bool Init(const string symbol,
              const ENUM_TIMEFRAMES entry_timeframe, const ENUM_TIMEFRAMES trend_timeframe,
              const int trend_ema_period,

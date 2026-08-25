@@ -12,11 +12,18 @@ class CScalpSignalEngine
 private:
    string            m_symbol;
    ENUM_TIMEFRAMES   m_timeframe;
-   int               m_handle_fast = INVALID_HANDLE;
-   int               m_handle_slow = INVALID_HANDLE;
-   int               m_handle_rsi  = INVALID_HANDLE;
+   int               m_handle_fast;
+   int               m_handle_slow;
+   int               m_handle_rsi;
 
 public:
+                     CScalpSignalEngine()
+     {
+      m_handle_fast = INVALID_HANDLE;
+      m_handle_slow = INVALID_HANDLE;
+      m_handle_rsi  = INVALID_HANDLE;
+     }
+
    bool Init(const string symbol, const ENUM_TIMEFRAMES timeframe,
              const int fast_period, const int slow_period, const int rsi_period)
      {
