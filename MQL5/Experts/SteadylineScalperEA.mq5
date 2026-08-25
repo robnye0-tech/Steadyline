@@ -3,9 +3,12 @@
 //|      Fast scalping EA for EURUSD (works on any symbol).          |
 //|      Strategy: fast/slow EMA crossover on a low timeframe (M1    |
 //|      default), filtered by RSI so entries aren't taken into an   |
-//|      already-exhausted move. Small fixed SL/TP, a spread guard   |
-//|      so trades aren't taken when the cost eats the edge, and a   |
-//|      time-based exit so trades don't sit open past their thesis. |
+//|      already-exhausted move. SL/TP are sized off ATR so they     |
+//|      match what price actually does inside the hold window,      |
+//|      a spread guard skips trades when cost eats the edge, a      |
+//|      cooldown after each close limits overtrading, and a         |
+//|      time-based exit stops trades from sitting open past their   |
+//|      thesis.                                                     |
 //|      This is a starting scaffold, not a validated strategy --    |
 //|      backtest and forward-test on a demo account before going    |
 //|      live.                                                       |
@@ -31,13 +34,15 @@ input int               InpRsiPeriod        = 14;
 input double            InpRsiBuyMax        = 70.0;  // skip buys if RSI already above this
 input double            InpRsiSellMin       = 30.0;  // skip sells if RSI already below this
 
-input group "Trade management"
-input double            InpStopLossPoints   = 100;   // e.g. 100 points = 10 pips on a 5-digit EURUSD
-input double            InpTakeProfitPoints = 150;
+input group "Trade management (ATR-based SL/TP)"
+input int               InpAtrPeriod        = 14;
+input double            InpSlAtrMultiplier  = 1.0;   // stop distance = ATR * this
+input double            InpTpAtrMultiplier  = 1.5;   // target distance = ATR * this
 input int               InpMaxBarsInTrade   = 20;    // force-close if still open after this many bars
 
 input group "Cost guard"
 input int               InpMaxSpreadPoints  = 20;    // skip entries when current spread exceeds this
+input int               InpCooldownBars     = 5;     // bars to wait after a close before a new entry
 
 input group "Risk"
 input double            InpRiskPercent         = 0.5;  // % of equity risked per trade
@@ -50,6 +55,9 @@ CTradeUtils        g_trade;
 
 string             g_symbol;
 datetime           g_last_bar_time = 0;
+int                g_handle_atr = INVALID_HANDLE;
+bool               g_had_position = false;
+datetime           g_cooldown_from = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -59,6 +67,13 @@ int OnInit()
    if(!g_signals.Init(g_symbol, InpTimeframe, InpFastEmaPeriod, InpSlowEmaPeriod, InpRsiPeriod))
      {
       Print("SteadylineScalperEA: failed to create indicator handles");
+      return INIT_FAILED;
+     }
+
+   g_handle_atr = iATR(g_symbol, InpTimeframe, InpAtrPeriod);
+   if(g_handle_atr == INVALID_HANDLE)
+     {
+      Print("SteadylineScalperEA: failed to create ATR handle");
       return INIT_FAILED;
      }
 
@@ -72,6 +87,8 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    g_signals.Deinit();
+   if(g_handle_atr != INVALID_HANDLE)
+      IndicatorRelease(g_handle_atr);
   }
 
 //+------------------------------------------------------------------+
@@ -85,7 +102,12 @@ void OnTick()
    if(isNewBar)
       g_last_bar_time = barTime;
 
-   if(g_trade.HasOpenPosition())
+   bool hasPosition = g_trade.HasOpenPosition();
+   if(g_had_position && !hasPosition)
+      g_cooldown_from = barTime;
+   g_had_position = hasPosition;
+
+   if(hasPosition)
      {
       ManageOpenPosition();
       return;
@@ -100,6 +122,13 @@ void OnTick()
       return;
      }
 
+   if(InpCooldownBars > 0 && g_cooldown_from != 0)
+     {
+      int barsSinceClose = iBarShift(g_symbol, InpTimeframe, g_cooldown_from);
+      if(barsSinceClose < InpCooldownBars)
+         return;
+     }
+
    long spreadPoints = SymbolInfoInteger(g_symbol, SYMBOL_SPREAD);
    if(spreadPoints > InpMaxSpreadPoints)
       return;
@@ -108,11 +137,14 @@ void OnTick()
    if(signal == SIGNAL_NONE)
       return;
 
-   double point  = SymbolInfoDouble(g_symbol, SYMBOL_POINT);
+   double atr[1];
+   if(CopyBuffer(g_handle_atr, 0, 1, 1, atr) != 1 || atr[0] <= 0.0)
+      return;
+
    double ask    = SymbolInfoDouble(g_symbol, SYMBOL_ASK);
    double bid    = SymbolInfoDouble(g_symbol, SYMBOL_BID);
-   double slDist = InpStopLossPoints * point;
-   double tpDist = InpTakeProfitPoints * point;
+   double slDist = atr[0] * InpSlAtrMultiplier;
+   double tpDist = atr[0] * InpTpAtrMultiplier;
 
    double lots = g_risk.LotsForStopDistance(slDist);
    if(lots <= 0.0)

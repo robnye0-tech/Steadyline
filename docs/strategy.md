@@ -13,19 +13,43 @@ low timeframe (default M1):
   EA's timeframe; open positions are managed on every tick.
 
 Exits are:
-- A fixed stop-loss/take-profit in points, set on order open.
+- A stop-loss/take-profit sized off current volatility: distance =
+  ATR(`InpAtrPeriod`) × `InpSlAtrMultiplier` / `InpTpAtrMultiplier`,
+  recomputed at the moment each trade opens.
 - A **time-based exit**: if the position is still open after
   `InpMaxBarsInTrade` bars (default 20), it's force-closed regardless of
   P&L — a scalp thesis goes stale fast, so this avoids a small loser
   turning into a large one by drifting for hours.
 
-## Cost guard
+## Cost guards
 
-Scalping lives and dies on transaction cost. `InpMaxSpreadPoints` skips
-new entries whenever the current spread exceeds that threshold — without
-it, a strategy that looks profitable in backtests (which may model
-spread optimistically) can bleed out live when spread widens around
-news or thin liquidity.
+Scalping lives and dies on transaction cost:
+- `InpMaxSpreadPoints` skips new entries whenever the current spread
+  exceeds that threshold — without it, a strategy that looks profitable
+  in backtests (which may model spread optimistically) can bleed out
+  live when spread widens around news or thin liquidity.
+- `InpCooldownBars` blocks new entries for that many bars after any
+  position closes. Without it, a fast crossover-based strategy can churn
+  through far more trades than it has edge to pay spread on — see the
+  postmortem below.
+
+## Postmortem: why the first backtest lost steadily
+
+A first backtest with fixed 100/150-point SL/TP and no cooldown produced
+6,920 trades with a profit factor of 0.78 and a smooth, steady equity
+decline (not one blowup — a slow bleed). The tell: average win ($9.13)
+and average loss ($9.47) were nearly identical, despite a nominal 1.5:1
+TP:SL ratio. That only happens when most trades aren't reaching either
+SL or TP — they're being closed by the time-based exit at a roughly
+random price. Two structural causes, both now addressed above:
+1. Fixed 100/150-point distances didn't match what EURUSD actually moves
+   within a 20-bar M1 window, so ATR-based sizing replaces them.
+2. One trade roughly every 34 minutes was far too much churn for a
+   fixed-cost-per-trade strategy — `InpCooldownBars` cuts frequency.
+
+Re-run the backtest after this change before trusting any further
+parameter tuning — if it's still losing steadily rather than choppily,
+the entry logic itself (not just sizing/frequency) needs rework.
 
 ## Risk management
 
@@ -54,8 +78,6 @@ news or thin liquidity.
 - [ ] Slippage/requote handling: `InpSlippagePoints` (deviation) is set
       tight for scalping — verify it isn't causing rejected orders on
       your broker's execution model.
-- [ ] Consider a minimum-bars-since-last-trade cooldown to avoid
-      re-entering immediately after a stopped-out trade on noisy chop.
 
 ## Disclaimer
 
